@@ -170,6 +170,17 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
 .toast { position: fixed; z-index: 9; left: 50%; top: calc(16px + env(safe-area-inset-top)); transform: translate(-50%, -150%); padding: 12px 18px; border-radius: 20px; font-weight: 600; font-size: 15px; transition: transform .4s cubic-bezier(.2, .9, .2, 1); white-space: nowrap; }
 .toast.on { transform: translate(-50%, 0); }
 
+/* Test de niveau */
+.game.wide { grid-column: span 2; display: flex; align-items: center; gap: 14px; }
+.game.wide .ico { margin: 0; flex: none; }
+.q .ex { margin-top: 10px; font-size: 16px; font-weight: 400; font-style: italic; color: var(--sub); }
+.opt.def { font-size: 15px; font-weight: 500; line-height: 1.35; padding: 14px 16px; }
+.idk { margin-top: 12px; color: var(--sub); }
+.missed { text-align: left; margin: 0 0 18px; font-size: 14px; }
+.missed b { font-size: 15px; }
+.missed div + div { margin-top: 8px; }
+.result .hint { font-size: 13px; color: var(--sub); margin: -8px 0 16px; }
+
 @media (prefers-reduced-motion: reduce) { .bg i { animation: none; } * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -199,6 +210,7 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
 
     <h2>Jouer</h2>
     <div class="games">
+      <button class="glass game wide" data-game="test"><div class="ico">◎</div><div><b>Test de niveau</b><span>10 questions pour savoir où tu en es</span></div></button>
       <button class="glass game" data-game="quiz"><div class="ico">?</div><b>Quiz</b><span>Trouve le mot</span></button>
       <button class="glass game" data-game="gap"><div class="ico">✎</div><b>Phrase à trou</b><span>Complète la phrase</span></button>
       <button class="glass game" data-game="mix"><div class="ico">⇄</div><b>Mot mélangé</b><span>Remets les lettres</span></button>
@@ -233,6 +245,7 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
       <div class="big" id="score"></div>
       <div class="msg" id="msg"></div>
       <div class="pills"><div class="pill" id="gotxp"></div><div class="pill" id="gotstreak"></div></div>
+      <div id="extra"></div>
       <button class="btn primary" id="again">Rejouer</button>
       <button class="btn glass" id="tohome">Accueil</button>
     </div>
@@ -250,9 +263,12 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
 <script>
 const tg = window.Telegram && Telegram.WebApp;
 const LEVELS = { 0: "Tous", 1: "Courant", 2: "Soutenu", 3: "Expert" };
-const GAMES = { quiz: "Quiz définition", gap: "Phrase à trou", mix: "Mot mélangé", rev: "Révision" };
+const GAMES = { quiz: "Quiz définition", gap: "Phrase à trou", mix: "Mot mélangé", rev: "Révision", test: "Test de niveau" };
 const BOX_DAYS = [0, 1, 2, 4, 8, 16];  // mêmes règles que le bot
-const PER_GAME = 10, GOAL = 50, KEY = "lexico";
+const PER_GAME = 10, GOAL = 50, KEY = "lexico", LOG_KEY = "lexico_log", LOG_MAX = 150;
+const TEST_PLAN = { 1: 3, 2: 4, 3: 3 };  // questions par niveau, de la plus facile à la plus dure
+// Telegram ne laisse renvoyer des données au bot que si l'app est ouverte par le bouton « Test de niveau » du clavier.
+const CAN_SEND = new URLSearchParams(location.search).get("mode") === "test" && !!(tg && tg.initData);
 const $ = id => document.getElementById(id);
 const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -264,23 +280,24 @@ function today() {
   return Math.floor(Date.UTC(y, m - 1, d) / 864e5);
 }
 
-let WORDS = [], u, game;
+let WORDS = [], u, game, LOG = [];  // LOG : réponses des parties, [jour, mot, réussi 1/0, jeu q/g/m/r], envoyées au bot avec le test
 
-// ---------- Sauvegarde : Telegram CloudStorage, sinon le navigateur ----------
+// ---------- Sauvegarde : Telegram CloudStorage (4 Ko par clé), sinon le navigateur ----------
 function blank() { return { xp: 0, streak: 0, last: 0, day: 0, dayxp: 0, lvl: 0, book: {} }; }
-function load() {
+const cloud = () => tg && tg.CloudStorage && tg.isVersionAtLeast && tg.isVersionAtLeast("6.9");
+function load(key, def) {
   return new Promise(res => {
-    const fallback = () => { try { res(JSON.parse(localStorage.getItem(KEY)) || blank()); } catch (e) { res(blank()); } };
-    if (tg && tg.CloudStorage && tg.isVersionAtLeast && tg.isVersionAtLeast("6.9")) {
-      tg.CloudStorage.getItem(KEY, (err, v) => { if (err || !v) return fallback(); try { res(JSON.parse(v)); } catch (e) { fallback(); } });
-    } else fallback();
+    const fallback = () => { try { res(JSON.parse(localStorage.getItem(key)) || def); } catch (e) { res(def); } };
+    if (cloud()) tg.CloudStorage.getItem(key, (err, v) => { if (err || !v) return fallback(); try { res(JSON.parse(v)); } catch (e) { fallback(); } });
+    else fallback();
   });
 }
-function save() {
-  const s = JSON.stringify(u);
-  try { localStorage.setItem(KEY, s); } catch (e) {}
-  if (tg && tg.CloudStorage && tg.isVersionAtLeast && tg.isVersionAtLeast("6.9")) tg.CloudStorage.setItem(KEY, s, () => {});
+function store(key, val) {
+  const s = JSON.stringify(val);
+  try { localStorage.setItem(key, s); } catch (e) {}
+  if (cloud()) tg.CloudStorage.setItem(key, s, () => {});
 }
+const save = () => store(KEY, u);
 const streak = () => u.last >= today() - 1 ? u.streak : 0;
 const due = () => Object.entries(u.book).filter(([, [, d]]) => d <= today()).map(([i]) => +i);
 
@@ -329,9 +346,11 @@ function start(kind) {
   if (kind === "rev") {
     ids = due();
     if (!ids.length) { haptic("ko"); return toast("Rien à revoir aujourd'hui 👍"); }
+  } else if (kind === "test") {
+    ids = Object.entries(TEST_PLAN).flatMap(([n, k]) => shuffle(WORDS.map((w, i) => i).filter(i => WORDS[i].n === +n)).slice(0, k));
   } else ids = WORDS.map((w, i) => i).filter(i => !u.lvl || WORDS[i].n === u.lvl);
   haptic("medium");
-  game = { kind, ids: shuffle(ids).slice(0, PER_GAME), i: 0, good: 0, xp: 0 };
+  game = { kind, ids: kind === "test" ? ids : shuffle(ids).slice(0, PER_GAME), i: 0, good: 0, xp: 0, ans: [] };
   show("play");
   ask();
 }
@@ -344,7 +363,7 @@ function options(i) {
 function ask() {
   if (game.i >= game.ids.length) return finish();
   const i = game.ids[game.i], w = WORDS[i];
-  const mode = game.kind === "rev" ? (Math.random() < .5 ? "quiz" : "gap") : game.kind;
+  const mode = game.kind === "rev" ? (Math.random() < .5 ? "quiz" : "gap") : game.kind === "test" ? "def" : game.kind;
   Object.assign(game, { cur: i, mode, open: true });
   $("prog").style.width = (game.i / game.ids.length * 100) + "%";
   $("count").textContent = `${game.i + 1}/${game.ids.length}`;
@@ -358,6 +377,10 @@ function ask() {
     $("answer").innerHTML = `<div class="slots" id="slots"></div><div class="letters" id="letters">${letters.map((c, k) => `<button class="glass tile" data-k="${k}">${esc(c)}</button>`).join("")}</div>
       <div class="row"><button class="btn glass" id="hint">💡 Indice</button><button class="btn glass" id="skip">Je passe</button></div>`;
     drawSlots();
+  } else if (mode === "def") {
+    $("qtxt").innerHTML = `Que veut dire <em>${esc(w.w)}</em> ?<div class="ex">« ${esc(w.e)} »</div>`;
+    $("answer").innerHTML = `<div class="opts">${options(i).map(o => `<button class="glass opt def" data-t="${o}">${esc(WORDS[o].d)}</button>`).join("")}</div>
+      <button class="btn glass idk" data-t="-1">Je ne sais pas</button>`;
   } else {
     $("qtxt").innerHTML = mode === "quiz"
       ? `Quel mot veut dire : <em>${esc(w.d)}</em>`
@@ -404,6 +427,8 @@ function award(i, ok, review) {
 function verdict(ok, note = "") {
   game.open = false; game.miss = 0;
   award(game.cur, ok, game.kind === "rev");
+  LOG = [...LOG, [today(), game.cur, +ok, game.kind === "rev" ? "r" : game.mode[0]]].slice(-LOG_MAX);
+  store(LOG_KEY, LOG);
   if (ok) { game.good++; game.xp += 10; }
   haptic(ok ? "ok" : "ko");
   const w = WORDS[game.cur], last = game.i + 1 >= game.ids.length;
@@ -421,7 +446,60 @@ function next() {
   setTimeout(ask, 150);
 }
 
+// ---------- Test de niveau ----------
+// Réponse : 1 juste, 0 faux, -1 « je ne sais pas ». Pas de correction pendant le test, pour ne pas l'influencer.
+function testAnswer(pick) {
+  if (!game.open) return;
+  game.open = false;
+  const r = pick === -1 ? -1 : +(pick === game.cur);
+  game.ans.push([game.cur, r]);
+  if (r === 1) game.good++;
+  else u.book[game.cur] = u.book[game.cur] || [1, today() + 1];
+  haptic("light");
+  game.i++;
+  setTimeout(ask, 120);
+}
+
+// Niveau : on passe un palier en réussissant la majorité de ses questions.
+// Le niveau conseillé pour s'entraîner est le premier palier pas encore acquis.
+function testLevel(ans) {
+  const good = { 1: 0, 2: 0, 3: 0 };
+  ans.forEach(([i, r]) => { if (r === 1) good[WORDS[i].n]++; });
+  if (good[1] < 2) return { label: "Courant (à consolider)", lvl: 1, good };
+  if (good[2] < 3) return { label: good[2] >= 2 ? "Courant · début du soutenu" : "Courant", lvl: 2, good };
+  if (good[3] < 2) return { label: "Soutenu", lvl: 3, good };
+  return { label: "Expert", lvl: 3, good };
+}
+
+function finishTest() {
+  const res = testLevel(game.ans);
+  u.lvl = res.lvl;
+  save();
+  game.res = res;
+  const missed = game.ans.filter(([, r]) => r !== 1).map(([i]) => WORDS[i]);
+  $("score").textContent = `${game.good}/${game.ids.length}`;
+  $("msg").textContent = res.label;
+  $("gotxp").textContent = `Entraînement : ${LEVELS[res.lvl]}`;
+  $("gotstreak").textContent = `${missed.length} mot${missed.length > 1 ? "s" : ""} au carnet`;
+  $("extra").innerHTML = (missed.length ? `<div class="missed">${missed.map(w => `<div><b>${esc(w.w)}</b> · ${esc(w.d)}</div>`).join("")}</div>` : "")
+    + (CAN_SEND ? "" : `<p class="hint">Pour envoyer ce résultat à l'analyse, refais le test depuis le bouton « 📝 Test de niveau » sous le chat du bot.</p>`);
+  $("again").textContent = CAN_SEND ? "Envoyer à l'analyse" : "Refaire le test";
+  show("end");
+}
+
+// Envoie le test et les parties jouées au bot (Telegram ferme alors l'app). Limite Telegram : 4096 octets.
+function sendResults() {
+  const payload = { v: 1, day: today(), label: game.res.label, lvl: game.res.lvl, score: game.good, ans: game.ans, log: LOG };
+  while (JSON.stringify(payload).length > 4000 && payload.log.length) payload.log = payload.log.slice(10);
+  LOG = [];
+  store(LOG_KEY, LOG);
+  tg.sendData(JSON.stringify(payload));
+}
+
 function finish() {
+  if (game.kind === "test") return finishTest();
+  $("extra").innerHTML = "";
+  $("again").textContent = "Rejouer";
   const n = game.ids.length, g = game.good;
   $("score").textContent = `${g}/${n}`;
   $("msg").textContent = g === n ? "Sans faute ! 🏆" : g >= n * .7 ? "Très bien ! 💪" : g >= n * .4 ? "Pas mal, continue." : "Courage, ça viendra.";
@@ -450,12 +528,14 @@ document.addEventListener("click", e => {
     if (!ok) t.classList.add("bad");
     setTimeout(() => verdict(ok), 450);
   }
+  else if (t.dataset.t !== undefined && game) testAnswer(+t.dataset.t);
   else if (t.dataset.k !== undefined) pickLetter(+t.dataset.k);
   else if (t.dataset.s !== undefined && game.open) { game.picked.splice(+t.dataset.s); haptic("light"); drawSlots(); }
   else if (t.id === "hint" && game.open) { const w = WORDS[game.cur].w; toast(`Commence par « ${w[0].toUpperCase()} » · ${w.length} lettres`); }
   else if (t.id === "skip" && game.open) verdict(false);
   else if (t.id === "next") next();
   else if (t.id === "quit") quit();
+  else if (t.id === "again" && game.kind === "test" && CAN_SEND) sendResults();
   else if (t.id === "again") start(game.kind !== "rev" || due().length ? game.kind : "quiz");
   else if (t.id === "tohome") show("home");
 });
@@ -467,9 +547,10 @@ document.addEventListener("click", e => {
     try { tg.setHeaderColor("#ffffff"); tg.setBackgroundColor("#ffffff"); } catch (e) {}
     tg.BackButton.onClick(() => document.body.classList.contains("playing") ? quit() : show("home"));
   }
-  [WORDS, u] = await Promise.all([fetch("words.json").then(r => r.json()), load()]);
+  [WORDS, u, LOG] = await Promise.all([fetch("words.json").then(r => r.json()), load(KEY, blank()), load(LOG_KEY, [])]);
   u = Object.assign(blank(), u);
   renderHome();
+  if (CAN_SEND) start("test");
 })();
 </script>
 </body>
