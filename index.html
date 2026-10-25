@@ -278,7 +278,7 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
         <div class="glass seg" id="speed"><button data-speed="0.7">Lent</button><button data-speed="1" class="on">Normal</button><button data-speed="1.4">Rapide</button></div>
       </div>
       <button class="btn primary" id="rec">🎙 Enregistrer ma lecture</button>
-      <p class="rec-hint" id="rechint">Touche ▶︎ : le poème défile et l'enregistrement démarre. À la fin du poème (ou sur « Terminer »), la correction s'affiche ici.</p>
+      <p class="rec-hint" id="rechint">Touche ▶︎ : le poème défile et l'enregistrement démarre. Touche ⏹ pour tout arrêter, ou laisse aller jusqu'à la fin : la correction s'affiche ici.</p>
     </div>
     <div class="glass readres" id="readres" hidden></div>
   </section>
@@ -445,7 +445,7 @@ function togglePoem() {
   if (poem.timer) return stopPoem();
   if (poem.line === -1) [...$("verses").children].forEach(p => p.classList.remove("done", "cur"));
   else poem.line--;  // reprend au vers en cours
-  $("playpause").textContent = "⏸";
+  $("playpause").textContent = rec.stream ? "⏹" : "⏸";
   haptic("light");
   stepPoem();
 }
@@ -579,6 +579,7 @@ async function startRec() {
   rec.tick = setInterval(() => { const s = (Date.now() - rec.t0) / 1000 | 0; $("rec").textContent = `⏹ Terminer · ${s / 60 | 0}:${String(s % 60).padStart(2, "0")}`; }, 500);
   haptic("medium");
   if (!poem.timer) { poem.line = -1; togglePoem(); }  // le texte défile pendant la lecture
+  $("playpause").textContent = "⏹";
   // Le modèle se télécharge pendant que tu lis.
   loadModel(pct => { if (!rec.stream) setRec("busy", `⏳ Téléchargement du correcteur · ${pct} %`); }).catch(() => {});
 }
@@ -840,8 +841,8 @@ document.addEventListener("click", e => {
   else if (t.id === "quit") quit();
   else if (t.dataset.poem !== undefined) { haptic("light"); openPoem(+t.dataset.poem); }
   else if (t.dataset.speed) { poem.speed = +t.dataset.speed; document.querySelectorAll("#speed button").forEach(b => b.classList.toggle("on", b === t)); }
-  // ▶︎ au début du poème : le texte défile et l'enregistrement démarre en même temps. Ensuite, ▶︎/⏸ met juste le défilement en pause.
-  else if (t.id === "playpause") !rec.stream && !poem.timer && poem.line === -1 ? startRec() : togglePoem();
+  // ▶︎ au début du poème : le texte défile et l'enregistrement démarre. ⏹ pendant l'enregistrement : tout s'arrête et la correction se lance.
+  else if (t.id === "playpause") rec.stream ? stopRec() : !poem.timer && poem.line === -1 ? startRec() : togglePoem();
   else if (t.id === "rec") rec.stream ? stopRec() : startRec();
   else if (t.id === "reread") openPoem(poem.i);
   else if (t.id === "again" && game.kind === "test" && CAN_SEND) sendResults();
