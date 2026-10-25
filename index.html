@@ -197,6 +197,21 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
 .controls { display: flex; gap: 10px; margin: 14px 0 10px; }
 .controls .btn { flex: none; width: 64px; padding: 14px 0; }
 .controls .seg { flex: 1; }
+#rec.on { background: var(--bad); box-shadow: 0 8px 24px color-mix(in srgb, var(--bad) 40%, transparent); animation: pulse 1.4s ease-in-out infinite; }
+#rec[disabled] { opacity: .75; }
+@keyframes pulse { 50% { transform: scale(.97); } }
+.rec-hint { text-align: center; font-size: 13px; color: var(--sub); margin: 10px 0 0; }
+.verses span.miss { color: var(--bad); -webkit-text-fill-color: var(--bad); text-decoration: line-through; }
+.verses span.pron { color: #e8890c; -webkit-text-fill-color: #e8890c; text-decoration: underline wavy; text-underline-offset: 4px; cursor: pointer; }
+.verses.graded p { opacity: 1; transform: none; background: none; -webkit-text-fill-color: currentColor; color: var(--text); }
+.verses.graded p.unread { opacity: .3; }
+.readres { padding: 18px 20px; margin-top: 14px; }
+.readres .big { font-size: 40px; font-weight: 800; letter-spacing: -.02em; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.readres .sum { color: var(--sub); font-size: 14px; margin-bottom: 10px; }
+.readres .issue { font-size: 15px; padding: 6px 0; border-top: 1px solid rgba(127,127,140,.15); }
+.readres .issue b { color: #e8890c; }
+.readres .issue b.miss { color: var(--bad); }
+.readres .note { font-size: 12px; color: var(--sub); margin: 10px 0 14px; }
 
 @media (prefers-reduced-motion: reduce) { .bg i { animation: none; } * { transition: none !important; animation: none !important; } }
 </style>
@@ -228,7 +243,7 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
     <h2>Jouer</h2>
     <div class="games">
       <button class="glass game wide" data-game="test"><div class="ico">◎</div><div><b>Test de niveau</b><span>10 questions pour savoir où tu en es</span></div></button>
-      <button class="glass game wide" data-tab="read"><div class="ico">🎙</div><div><b>Lecture à voix haute</b><span>Lis un poème, le bot repère tes fautes</span></div></button>
+      <button class="glass game wide" data-tab="read"><div class="ico">🎙</div><div><b>Lecture à voix haute</b><span>Lis un poème, l'app repère tes fautes</span></div></button>
       <button class="glass game" data-game="quiz"><div class="ico">?</div><b>Quiz</b><span>Trouve le mot</span></button>
       <button class="glass game" data-game="gap"><div class="ico">✎</div><b>Phrase à trou</b><span>Complète la phrase</span></button>
       <button class="glass game" data-game="mix"><div class="ico">⇄</div><b>Mot mélangé</b><span>Remets les lettres</span></button>
@@ -249,7 +264,7 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
   <!-- Lecture : liste des poèmes -->
   <section class="screen" id="read">
     <h1>Lecture</h1>
-    <p class="hello">Entraîne-toi ici avec le texte qui défile, puis lis-le au bot en message vocal : il repère les mots oubliés ou mal lus.</p>
+    <p class="hello">Choisis un poème, lis-le à voix haute : l'app t'écoute et te montre les mots oubliés ou mal prononcés.</p>
     <div class="glass list" id="poemlist"></div>
   </section>
 
@@ -257,11 +272,15 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
   <section class="screen" id="poem">
     <div class="poem-head"><b id="ptitle"></b><span id="pauthor"></span></div>
     <div class="glass verses" id="verses"></div>
-    <div class="controls">
-      <button class="btn primary" id="playpause">▶︎</button>
-      <div class="glass seg" id="speed"><button data-speed="0.7">Lent</button><button data-speed="1" class="on">Normal</button><button data-speed="1.4">Rapide</button></div>
+    <div id="readctl">
+      <div class="controls">
+        <button class="btn primary" id="playpause">▶︎</button>
+        <div class="glass seg" id="speed"><button data-speed="0.7">Lent</button><button data-speed="1" class="on">Normal</button><button data-speed="1.4">Rapide</button></div>
+      </div>
+      <button class="btn primary" id="rec">🎙 Enregistrer ma lecture</button>
+      <p class="rec-hint" id="rechint">Lis le poème à voix haute, puis touche « Terminer » : la correction s'affiche ici.</p>
     </div>
-    <button class="btn primary" id="tobot">🎙 Lire au bot et être corrigé</button>
+    <div class="glass readres" id="readres" hidden></div>
   </section>
 
   <!-- Partie -->
@@ -302,7 +321,7 @@ const tg = window.Telegram && Telegram.WebApp;
 const LEVELS = { 0: "Tous", 1: "Courant", 2: "Soutenu", 3: "Expert" };
 const GAMES = { quiz: "Quiz définition", gap: "Phrase à trou", mix: "Mot mélangé", rev: "Révision", test: "Test de niveau" };
 const BOX_DAYS = [0, 1, 2, 4, 8, 16];  // mêmes règles que le bot
-const PER_GAME = 10, GOAL = 50, KEY = "lexico", LOG_KEY = "lexico_log", LOG_MAX = 150;
+const PER_GAME = 10, GOAL = 50, KEY = "lexico", LOG_KEY = "lexico_log", LOG_MAX = 150, READS_KEY = "lexico_reads";
 const TEST_PLAN = { 1: 3, 2: 4, 3: 3 };  // questions par niveau, de la plus facile à la plus dure
 // Telegram ne laisse renvoyer des données au bot que si l'app est ouverte par un bouton du clavier (« Test de niveau » ou « Lecture »).
 const MODE = new URLSearchParams(location.search).get("mode");
@@ -318,7 +337,7 @@ function today() {
   return Math.floor(Date.UTC(y, m - 1, d) / 864e5);
 }
 
-let WORDS = [], POEMS = [], u, game, LOG = [], poem;  // LOG : réponses des parties, [jour, mot, réussi 1/0, jeu q/g/m/r], envoyées au bot avec le test
+let WORDS = [], POEMS = [], u, game, LOG = [], poem, READS = [];  // READS : lectures, envoyées au bot avec le test  // LOG : réponses des parties, [jour, mot, réussi 1/0, jeu q/g/m/r], envoyées au bot avec le test
 
 // ---------- Sauvegarde : Telegram CloudStorage (4 Ko par clé), sinon le navigateur ----------
 function blank() { return { xp: 0, streak: 0, last: 0, day: 0, dayxp: 0, lvl: 0, book: {} }; }
@@ -345,7 +364,7 @@ function show(id) {
   document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === id));
   document.body.classList.toggle("playing", id === "play" || id === "end");
   if (tg) id === "home" ? tg.BackButton.hide() : tg.BackButton.show();
-  if (id !== "poem") stopPoem();
+  if (id !== "poem") { stopPoem(); if (rec.stream) stopRec(false); }
   document.querySelector(`.tabs button[data-tab="read"]`).classList.toggle("on", id === "read" || id === "poem");
   if (id === "home") renderHome();
   if (id === "book") renderBook();
@@ -391,9 +410,18 @@ function openPoem(i) {
   const p = POEMS[i];
   $("ptitle").textContent = p.title;
   $("pauthor").textContent = p.author;
-  $("verses").innerHTML = p.lines.map(l => `<p>${esc(l)}</p>`).join("");
+  // Chaque mot dans un <span>, pour colorer la correction mot par mot (même découpage que poems.json « words »).
+  let k = 0;
+  $("verses").innerHTML = p.lines.map((l, li) => `<p>${l.split(" ").map(raw => {
+    const w = p.words[k];
+    return w && w[0] === li && raw.includes(w[1]) ? esc(raw).replace(esc(w[1]), `<span data-w="${k++}">${esc(w[1])}</span>`) : esc(raw);
+  }).join(" ")}</p>`).join("");
+  $("verses").classList.remove("graded");
   $("verses").scrollTop = 0;
   $("playpause").textContent = "▶︎";
+  $("readres").hidden = true;
+  $("readctl").hidden = false;
+  setRec("idle");
   show("poem");
 }
 // Chaque vers reste affiché un temps proportionnel à sa longueur.
@@ -420,6 +448,187 @@ function stopPoem() {
   clearTimeout(poem.timer);
   poem.timer = null;
   $("playpause").textContent = "▶︎";
+}
+
+// ---------- Enregistrement et correction, tout dans le téléphone ----------
+// Les sons entendus viennent d'un modèle wav2vec2 qui tourne dans l'app (téléchargé une fois, ~320 Mo, puis gardé en cache).
+// Les sons attendus de chaque mot sont précalculés dans poems.json (make_phonemes.py). On aligne les deux suites :
+// un mot dont les sons ont presque tous disparu est « oublié », une voyelle remplacée par une autre est « mal prononcée ».
+// Mêmes règles que pronunciation.py côté bot.
+const PH_MODEL = "onnx-community/wav2vec2-lv-60-espeak-cv-ft-ONNX";
+const TJS = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0";
+const SAME = { r: "ʁ", "ʀ": "ʁ", "ɑ": "a", "ɐ": "a", "ɜ": "ə", "ɪ": "i", "ʊ": "u", "œ̃": "ɛ̃", "æ̃": "ɛ̃", "ɡ": "g" };
+const CLOSE = new Set(["e|ɛ", "o|ɔ", "ø|œ", "ə|œ", "ə|ø"]);
+const SOUND = { e: "é", "ɛ": "è", "ə": "e", "ø": "eu (fermé)", "œ": "eu (ouvert)", o: "o (fermé)", "ɔ": "o (ouvert)", u: "ou", y: "u", i: "i", a: "a",
+  "ɑ̃": "an", "ɔ̃": "on", "ɛ̃": "in", "ʁ": "r", "ʃ": "ch", "ʒ": "j", "ɲ": "gn", j: "ill", w: "w", "ɥ": "u (de « huit »)" };
+const canon = p => SAME[p] || p;
+const isVowel = p => "aeiouyɛɔøœəɑɐɪʊɜæ".includes(p[0]);
+function phCost(a, b) {
+  a = canon(a); b = canon(b);
+  if (a === b) return 0;
+  return CLOSE.has([a, b].sort().join("|")) || (isVowel(a) && isVowel(b) && (a === "ə" || b === "ə")) ? .5 : 1;
+}
+const gapCost = p => canon(p) === "ə" ? .3 : 1;
+
+// Distance d'édition ; la fin du poème peut rester non lue sans pénalité. Renvoie [attendu, entendu|null, coût, non lu].
+function align(exp, got) {
+  const n = exp.length, m = got.length, D = Array.from({ length: n + 1 }, () => new Float32Array(m + 1));
+  for (let i = 1; i <= n; i++) D[i][0] = D[i - 1][0] + gapCost(exp[i - 1]);
+  for (let j = 1; j <= m; j++) D[0][j] = D[0][j - 1] + gapCost(got[j - 1]);
+  for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++)
+    D[i][j] = Math.min(D[i - 1][j - 1] + phCost(exp[i - 1], got[j - 1]), D[i - 1][j] + gapCost(exp[i - 1]), D[i][j - 1] + gapCost(got[j - 1]));
+  let i = 0;
+  for (let k = 1; k <= n; k++) if (D[k][m] < D[i][m]) i = k;
+  const out = exp.slice(i).map(p => [p, null, 0, true]).reverse();
+  let j = m;
+  while (i > 0 && j > 0) {
+    const c = phCost(exp[i - 1], got[j - 1]);
+    if (Math.abs(D[i][j] - (D[i - 1][j - 1] + c)) < 1e-4) { out.push([exp[i - 1], got[j - 1], c, false]); i--; j--; }
+    else if (Math.abs(D[i][j] - (D[i - 1][j] + gapCost(exp[i - 1]))) < 1e-4) { out.push([exp[i - 1], null, gapCost(exp[i - 1]), false]); i--; }
+    else j--;
+  }
+  while (i > 0) { out.push([exp[i - 1], null, gapCost(exp[i - 1]), false]); i--; }
+  return out.reverse();
+}
+
+function grade(p, got) {
+  const exp = [], owner = [];
+  p.words.forEach(([, , ph], k) => ph.split(" ").filter(Boolean).forEach(x => { exp.push(x); owner.push(k); }));
+  const pairs = align(exp, got);
+  return p.words.map(([li, w], k) => {
+    const mine = pairs.filter((_, x) => owner[x] === k);
+    if (!mine.length || mine.every(x => x[3])) return { k, li, w, st: "unread" };
+    const del = mine.filter(x => !x[1]).length, ratio = mine.reduce((a, x) => a + x[2], 0) / mine.length;
+    if (mine.length >= 2 && del / mine.length >= .66) return { k, li, w, st: "miss" };
+    const v = mine.find(x => x[1] && x[2] >= 1 && isVowel(x[0]) && isVowel(x[1]));
+    const hard = mine.find(x => x[2] >= 1);
+    // Consonnes et sons manquants : la version allégée du modèle en invente souvent, on ne garde que les mots très déformés.
+    if (v || (ratio >= .75 && hard && mine.length >= 3)) {
+      const [e, g] = v || hard;
+      return { k, li, w, st: "pron", exp: e, got: g, what: g ? `« ${SOUND[e] || e} » prononcé « ${SOUND[g] || g} »` : `son « ${SOUND[e] || e} » pas entendu` };
+    }
+    return { k, li, w, st: "ok" };
+  });
+}
+
+let phModel = null;
+async function loadModel(onProgress) {
+  if (phModel) return phModel;
+  phModel = (async () => {
+    const T = await import(TJS);
+    const files = {};
+    const progress_callback = x => {
+      if (x.status !== "progress" || !x.total) return;
+      files[x.file] = [x.loaded, x.total];
+      const [a, b] = Object.values(files).reduce(([a, b], [l, t]) => [a + l, b + t], [0, 0]);
+      onProgress(Math.round(100 * a / b));
+    };
+    // Le modèle n'a pas de tokenizer.json : on lit directement ses sorties avec vocab.json.
+    const [fe, model, vocab] = await Promise.all([
+      T.AutoFeatureExtractor.from_pretrained(PH_MODEL, { progress_callback }),
+      T.AutoModelForCTC.from_pretrained(PH_MODEL, { dtype: "q8", progress_callback }),
+      fetch(`https://huggingface.co/${PH_MODEL}/resolve/main/vocab.json`).then(r => r.json())]);
+    const id2 = Object.fromEntries(Object.entries(vocab).map(([s, i]) => [i, s]));
+    return { fe, model, id2, blank: vocab["<pad>"] ?? 0 };
+  })().catch(e => { phModel = null; throw e; });
+  return phModel;
+}
+
+async function phonemes(pcm) {
+  const { fe, model, id2, blank } = await phModel;
+  const { logits } = await model(await fe(pcm));
+  const [, T, V] = logits.dims, d = logits.data, out = [];
+  let prev = -1;
+  for (let i = 0; i < T; i++) {
+    let b = 0;
+    for (let j = 1; j < V; j++) if (d[i * V + j] > d[i * V + b]) b = j;
+    if (b !== prev && b !== blank) out.push(id2[b]);
+    prev = b;
+  }
+  return out;
+}
+
+const rec = { stream: null, ctx: null, chunks: [], t0: 0, tick: null };
+function setRec(state, text) {
+  const b = $("rec");
+  b.classList.toggle("on", state === "rec");
+  b.disabled = state === "busy";
+  b.textContent = text || { idle: "🎙 Enregistrer ma lecture", rec: "⏹ Terminer" }[state] || b.textContent;
+}
+
+async function startRec() {
+  try {
+    rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch (e) {
+    return toast("Micro refusé : autorise-le pour Telegram dans les réglages");
+  }
+  rec.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = rec.ctx.createMediaStreamSource(rec.stream), node = rec.ctx.createScriptProcessor(4096, 1, 1);
+  rec.chunks = [];
+  node.onaudioprocess = ev => rec.chunks.push(new Float32Array(ev.inputBuffer.getChannelData(0)));
+  src.connect(node); node.connect(rec.ctx.destination);
+  rec.t0 = Date.now();
+  setRec("rec");
+  rec.tick = setInterval(() => { const s = (Date.now() - rec.t0) / 1000 | 0; $("rec").textContent = `⏹ Terminer · ${s / 60 | 0}:${String(s % 60).padStart(2, "0")}`; }, 500);
+  haptic("medium");
+  if (!poem.timer) { poem.line = -1; togglePoem(); }  // le texte défile pendant la lecture
+  // Le modèle se télécharge pendant que tu lis.
+  loadModel(pct => { if (!rec.stream) setRec("busy", `⏳ Téléchargement du correcteur · ${pct} %`); }).catch(() => {});
+}
+
+async function stopRec(analyse = true) {
+  clearInterval(rec.tick);
+  rec.stream.getTracks().forEach(t => t.stop());
+  rec.stream = null;
+  const sr = rec.ctx.sampleRate, n = rec.chunks.reduce((a, c) => a + c.length, 0);
+  rec.ctx.close();
+  stopPoem();
+  if (!analyse) return setRec("idle");
+  if (n < sr) { setRec("idle"); return toast("Enregistrement trop court"); }
+  setRec("busy", "⏳ Préparation du correcteur…");
+  try {
+    // Ré-échantillonnage à 16 kHz, le format du modèle.
+    const buf = new AudioBuffer({ length: n, sampleRate: sr, numberOfChannels: 1 });
+    let off = 0;
+    rec.chunks.forEach(c => { buf.copyToChannel(c, 0, off); off += c.length; });
+    const oc = new OfflineAudioContext(1, Math.ceil(n * 16000 / sr), 16000), s = oc.createBufferSource();
+    s.buffer = buf; s.connect(oc.destination); s.start();
+    const pcm = (await oc.startRendering()).getChannelData(0);
+    await loadModel(pct => setRec("busy", `⏳ Téléchargement du correcteur · ${pct} %`));
+    setRec("busy", "⏳ Correction en cours…");
+    showReading(grade(POEMS[poem.i], await phonemes(pcm)));
+  } catch (e) {
+    toast("La correction a échoué : réessaie");
+    console.error(e);
+  }
+  setRec("idle");
+}
+
+function showReading(res) {
+  const p = POEMS[poem.i], read = res.filter(r => r.st !== "unread"), ok = read.filter(r => r.st === "ok").length;
+  const miss = read.filter(r => r.st === "miss"), pron = read.filter(r => r.st === "pron");
+  res.forEach(r => {
+    const el = $("verses").querySelector(`[data-w="${r.k}"]`);
+    if (!el) return;
+    el.className = r.st === "miss" || r.st === "pron" ? r.st : "";
+    if (r.what) el.dataset.what = `${r.w} : ${r.what}`;
+  });
+  [...$("verses").children].forEach((el, li) => el.classList.toggle("unread", res.filter(r => r.li === li).every(r => r.st === "unread")));
+  $("verses").classList.add("graded");
+  $("verses").scrollTop = 0;
+  const score = Math.round(100 * ok / Math.max(read.length, 1));
+  $("readres").innerHTML = `<div class="big">${score} %</div>
+    <div class="sum">${ok}/${read.length} mots bien lus${miss.length ? ` · ${miss.length} oublié${miss.length > 1 ? "s" : ""}` : ""}${pron.length ? ` · ${pron.length} à mieux prononcer` : ""}${read.length < res.length ? ` · fin non lue` : ""}</div>
+    ${miss.map(r => `<div class="issue"><b class="miss">${esc(r.w)}</b> : oublié ou mal lu</div>`).join("")}
+    ${pron.map(r => `<div class="issue"><b>${esc(r.w)}</b> : ${esc(r.what)}</div>`).join("")}
+    <p class="note">Correction automatique, indicative : la machine peut se tromper, surtout avec du bruit autour.</p>
+    <div class="row"><button class="btn primary" id="reread">Relire</button><button class="btn glass" data-tab="read">Autre poème</button></div>`;
+  $("readres").hidden = false;
+  $("readctl").hidden = true;
+  haptic(score >= 80 ? "ok" : "light");
+  // Gardée pour l'analyse : [jour, poème, bien lus, lus, mots oubliés, [mot, son attendu, son entendu]]
+  READS = [...READS, [today(), poem.i, ok, read.length, miss.map(r => r.k), pron.map(r => [r.k, r.exp, r.got || ""])]].slice(-15);
+  store(READS_KEY, READS);
 }
 
 // ---------- Partie ----------
@@ -571,10 +780,12 @@ function finishTest() {
 
 // Envoie le test et les parties jouées au bot (Telegram ferme alors l'app). Limite Telegram : 4096 octets.
 function sendResults() {
-  const payload = { v: 1, day: today(), label: game.res.label, lvl: game.res.lvl, score: game.good, ans: game.ans, log: LOG };
+  const payload = { v: 1, day: today(), label: game.res.label, lvl: game.res.lvl, score: game.good, ans: game.ans, log: LOG, reads: READS };
   while (JSON.stringify(payload).length > 4000 && payload.log.length) payload.log = payload.log.slice(10);
-  LOG = [];
+  while (JSON.stringify(payload).length > 4000 && payload.reads.length) payload.reads = payload.reads.slice(1);
+  LOG = []; READS = [];
   store(LOG_KEY, LOG);
+  store(READS_KEY, READS);
   tg.sendData(JSON.stringify(payload));
 }
 
@@ -599,6 +810,8 @@ function quit() {
 
 // ---------- Clics ----------
 document.addEventListener("click", e => {
+  const w = e.target.closest(".verses span.pron");
+  if (w) return toast(w.dataset.what);
   const t = e.target.closest("button, .slot.full");
   if (!t) return;
   if (t.dataset.tab) { haptic("light"); show(t.dataset.tab); }
@@ -620,7 +833,8 @@ document.addEventListener("click", e => {
   else if (t.dataset.poem !== undefined) { haptic("light"); openPoem(+t.dataset.poem); }
   else if (t.dataset.speed) { poem.speed = +t.dataset.speed; document.querySelectorAll("#speed button").forEach(b => b.classList.toggle("on", b === t)); }
   else if (t.id === "playpause") togglePoem();
-  else if (t.id === "tobot") CAN_SEND ? tg.sendData(JSON.stringify({ kind: "poem", id: poem.i })) : toast("Ouvre « 🎙 Lecture » sous le chat, ou tape /lecture");
+  else if (t.id === "rec") rec.stream ? stopRec() : startRec();
+  else if (t.id === "reread") openPoem(poem.i);
   else if (t.id === "again" && game.kind === "test" && CAN_SEND) sendResults();
   else if (t.id === "again") start(game.kind !== "rev" || due().length ? game.kind : "quiz");
   else if (t.id === "tohome") show("home");
@@ -633,8 +847,8 @@ document.addEventListener("click", e => {
     try { tg.setHeaderColor("#ffffff"); tg.setBackgroundColor("#ffffff"); } catch (e) {}
     tg.BackButton.onClick(() => document.body.classList.contains("playing") ? quit() : show($("poem").classList.contains("on") ? "read" : "home"));
   }
-  [WORDS, POEMS, u, LOG] = await Promise.all([fetch("words.json").then(r => r.json()), fetch("poems.json").then(r => r.json()),
-                                              load(KEY, blank()), load(LOG_KEY, [])]);
+  [WORDS, POEMS, u, LOG, READS] = await Promise.all([fetch("words.json").then(r => r.json()), fetch("poems.json").then(r => r.json()),
+                                                     load(KEY, blank()), load(LOG_KEY, []), load(READS_KEY, [])]);
   u = Object.assign(blank(), u);
   renderHome();
   if (CAN_SEND && MODE === "test") start("test");
