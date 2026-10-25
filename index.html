@@ -213,6 +213,43 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
 .readres .issue b.miss { color: var(--bad); }
 .readres .note { font-size: 12px; color: var(--sub); margin: 10px 0 14px; }
 
+/* Collection */
+.orbs { display: flex; justify-content: space-between; padding: 14px 16px; }
+.orb { border-radius: 50%; display: grid; place-content: center; color: rgba(255,255,255,.95); font-weight: 800; flex: none;
+  background: radial-gradient(circle at 32% 28%, #fff 0 8%, var(--o1) 30%, var(--o2) 100%);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--o2) 45%, transparent), inset 0 -3px 6px rgba(0,0,0,.18); text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.orb.off { background: radial-gradient(circle at 32% 28%, #fff 0 8%, #e9ecef 30%, #ced4da 100%); color: rgba(0,0,0,.18); box-shadow: inset 0 -3px 6px rgba(0,0,0,.08); text-shadow: none; }
+.orbhint { font-size: 13px; color: var(--sub); margin: 8px 8px 0; }
+#wishbtn { margin-top: 12px; }
+.figs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fig { border: 0; color: inherit; font: inherit; padding: 12px 12px 14px; display: flex; flex-direction: column; align-items: center; text-align: center; cursor: pointer; transition: transform .2s; }
+.fig:active { transform: scale(.96); }
+.fig svg { margin: -4px 0 2px; }
+.fig b { font-size: 16px; }
+.fig span { font-size: 12px; color: var(--sub); }
+.fig small { font-size: 11px; color: var(--sub); margin-top: 4px; }
+.figbar { width: 100%; height: 6px; border-radius: 3px; background: rgba(127,127,140,.18); margin-top: 8px; overflow: hidden; }
+.figbar div { height: 100%; background: var(--grad); border-radius: 3px; }
+.fig.locked svg, .forms .locked svg { filter: brightness(0); opacity: .18; }
+.figdetail { display: flex; justify-content: center; margin: -6px 0 4px; }
+.forms { display: flex; justify-content: space-around; margin: 12px 0 4px; }
+.forms div { display: flex; flex-direction: column; align-items: center; }
+.forms small { font-size: 11px; color: var(--sub); }
+.wishes { display: grid; gap: 8px; margin: 12px 0; }
+.wishes .btn { text-align: left; font-size: 15px; }
+.wishes .btn[disabled] { opacity: .4; }
+.reward { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; padding: 24px; background: rgba(20, 20, 60, .35); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.reward.on { display: grid; animation: in .3s; }
+.rcard { width: 100%; max-width: 360px; padding: 26px 22px 20px; text-align: center; }
+.burst { position: relative; z-index: 0; display: flex; justify-content: center; align-items: center; min-height: 140px; margin-bottom: 8px; animation: pop .7s cubic-bezier(.2, 1.6, .4, 1); }
+.burst::before { content: ""; position: absolute; width: 190px; height: 190px; border-radius: 50%; background: radial-gradient(circle, var(--a) 0%, transparent 65%); animation: glow 1.6s ease-out infinite alternate; z-index: -1; }
+.burst.big { font-size: 90px; }
+.rtitle { font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
+.rsub { color: var(--sub); margin: 4px 0 18px; }
+@keyframes pop { 0% { transform: scale(.2) rotate(-12deg); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes glow { from { transform: scale(.8); opacity: .6; } to { transform: scale(1.15); opacity: 1; } }
+.tabs button { width: 74px; }
+
 @media (prefers-reduced-motion: reduce) { .bg i { animation: none; } * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -283,6 +320,20 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
     <div class="glass readres" id="readres" hidden></div>
   </section>
 
+  <!-- Collection -->
+  <section class="screen" id="collection">
+    <h1>Collection</h1>
+    <p class="hello">Tes Gardiens du Verbe se transforment quand tu maîtrises les mots de leur thème (un mot réussi 3 fois).</p>
+    <h2>Orbes · <span id="orbcount">0/7</span></h2>
+    <div class="glass orbs" id="orbs"></div>
+    <p class="orbhint" id="orbhint"></p>
+    <button class="btn primary" id="wishbtn" hidden>🌟 Faire un vœu</button>
+    <h2>Gardiens</h2>
+    <div class="figs" id="figs"></div>
+    <h2>Gardiens rares</h2>
+    <div class="figs" id="rares"></div>
+  </section>
+
   <!-- Partie -->
   <section class="screen" id="play">
     <div class="top">
@@ -309,11 +360,13 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
 
 <div class="glass sheet" id="sheet"></div>
 <div class="glass toast" id="toast"></div>
+<div class="reward" id="reward"></div>
 
 <nav class="glass tabs">
   <button class="on" data-tab="home"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.2 2.8 11a1 1 0 0 0 1.3 1.5l.9-.8V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-8.3l.9.8a1 1 0 1 0 1.3-1.5z"/></svg>Accueil</button>
   <button data-tab="book"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h11a2 2 0 0 1 2 2v14H7a1 1 0 0 0 0 2h12v2H7a3 3 0 0 1-3-3V4a2 2 0 0 1 2-2zm3 4v2h7V6z"/></svg>Carnet</button>
   <button data-tab="read"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1a7 7 0 0 0 6-6.9z"/></svg>Lecture</button>
+  <button data-tab="collection"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 14.9V18h3v3H8v-3h3v-3.1A5 5 0 0 1 8.3 12H8a4 4 0 0 1-4-4V5h3zm-1 4v1a2 2 0 0 0 1 1.7V7zm11 0v2.7A2 2 0 0 0 18 8V7z"/></svg>Collection</button>
 </nav>
 
 <script>
@@ -355,7 +408,7 @@ function store(key, val) {
   if (cloud()) tg.CloudStorage.setItem(key, s, () => {});
 }
 const save = () => store(KEY, u);
-const streak = () => u.last >= today() - 1 ? u.streak : 0;
+const streak = () => u.last >= today() - 1 || (u.last === today() - 2 && col && col.jokers > 0) ? u.streak : 0;
 const due = () => Object.entries(u.book).filter(([, [, d]]) => d <= today()).map(([i]) => +i);
 
 // ---------- Navigation ----------
@@ -369,6 +422,7 @@ function show(id) {
   if (id === "home") renderHome();
   if (id === "book") renderBook();
   if (id === "read") renderPoems();
+  if (id === "collection") renderCollection();
   window.scrollTo(0, 0);
 }
 function toast(t) {
@@ -380,7 +434,7 @@ function toast(t) {
 function renderHome() {
   if (u.day !== today()) { u.day = today(); u.dayxp = 0; }
   const name = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.first_name;
-  $("hello").textContent = name ? `Salut ${name} 👋` : "Enrichis ton vocabulaire";
+  $("hello").textContent = (name ? `Salut ${name} 👋` : "Enrichis ton vocabulaire") + (col.title ? ` · 👑 ${col.title}` : "");
   $("dayxp").textContent = u.dayxp;
   $("ring").style.strokeDashoffset = 301.6 * (1 - Math.min(u.dayxp, GOAL) / GOAL);
   $("xp").textContent = u.xp;
@@ -638,6 +692,230 @@ function showReading(res) {
   // Gardée pour l'analyse : [jour, poème, bien lus, lus, mots oubliés, [mot, son attendu, son entendu]]
   READS = [...READS, [today(), poem.i, ok, read.length, miss.map(r => r.k), pron.map(r => [r.k, r.exp, r.got || ""])]].slice(-15);
   store(READS_KEY, READS);
+  if (score >= 90 && read.length >= 10) earnOrb("reading");
+  if (score >= 80 && read.length >= 10) openChest();
+  setTimeout(showRewards, 900);
+}
+
+// ---------- Collection : les Gardiens du Verbe ----------
+// Une figurine par thème de mots. Un mot est « maîtrisé » quand il a été réussi 3 fois (parties ou test).
+// Forme 2 à 30 % des mots du thème maîtrisés, forme 3 à 70 %. La puissance monte de 10 par bonne réponse du thème.
+// 7 Orbes se gagnent par des exploits ; réunies, elles donnent un vœu. Les figurines rares sortent des coffres
+// (lecture à 80 % ou plus) ou d'un vœu. Personnages et dessins originaux, propres à Lexico.
+const COL_KEY = "lexico_col", MASTER = 3, CHEST_RARE = .35;
+const FIGS = [
+  { id: "kairo", name: "Kaïro", theme: "caractère", role: "Moine guerrier au bâton", skin: "#f1c27d", hair: "bald", hc: "#3d7bff", outfit: "#eef2ff", dark: "#3d7bff", item: "staff", auras: ["#7aa2ff", "#ffcf3d", "#ffffff"], forms: ["Novice", "Gardien", "Éveillé"] },
+  { id: "lyssa", name: "Lyssa", theme: "émotions", role: "Combattante aux éventails", skin: "#ffdbb5", hair: "long", hc: "#d6336c", outfit: "#2b2d42", dark: "#d6336c", item: "fans", auras: ["#ff8fd0", "#ff4d4d", "#a259ff"], forms: ["Étincelle", "Flamme", "Brasier"] },
+  { id: "vox", name: "Vox", theme: "langage", role: "Maître du cri de combat", skin: "#c68642", hair: "mohawk", hc: "#1b1b1b", outfit: "#ff9f0a", dark: "#7a3e00", item: "waves", auras: ["#ffd27a", "#ff9f0a", "#ff3b30"], forms: ["Murmure", "Écho", "Tonnerre"] },
+  { id: "sylvan", name: "Sylvan", theme: "nature", role: "Guerrier-arbre", skin: "#b5d99c", hair: "leaves", hc: "#2f9e44", outfit: "#8b5a2b", dark: "#5c3a1e", item: "leaf", auras: ["#7ef0c8", "#30d158", "#0b8f5a"], forms: ["Pousse", "Sylve", "Forêt vivante"] },
+  { id: "forgo", name: "Forgo", theme: "travail", role: "Colosse forgeron", skin: "#e0ac69", hair: "beard", hc: "#5c3a21", outfit: "#495057", dark: "#212529", item: "hammer", auras: ["#ffb36b", "#ff6a00", "#ff2d00"], forms: ["Apprenti", "Forgeron", "Titan de lave"] },
+  { id: "mira", name: "Mira", theme: "cuisine", role: "Cheffe aux couteaux", skin: "#f5d0b0", hair: "bun", hc: "#2b2b2b", outfit: "#ffffff", dark: "#f03e3e", item: "knives", auras: ["#ffe066", "#ff922b", "#f03e3e"], forms: ["Commis", "Cheffe", "Grande cheffe"] },
+  { id: "tiko", name: "Tiko", theme: "quotidien", role: "Petit guerrier malin", skin: "#ffcd94", hair: "cap", hc: "#3d7bff", outfit: "#30d158", dark: "#1b7a3a", item: "star", auras: ["#9be7ff", "#3d7bff", "#9b5cff"], forms: ["Petit", "Rapide", "Légendaire"] },
+];
+const RARES = [
+  { id: "oro", name: "Maître Oro", role: "Le vieux maître caché", skin: "#f1c27d", hair: "sage", hc: "#f8f9fa", outfit: "#7048e8", dark: "#3b1f9e", item: "staff", auras: ["#d0bfff", "#b197fc", "#ffffff"], forms: ["Maître"] },
+  { id: "nyx", name: "Nyx", role: "La rivale de l'ombre", skin: "#e9d5ff", hair: "hood", hc: "#1e1b4b", outfit: "#312e81", dark: "#111827", item: "fans", auras: ["#6d28d9", "#4c1d95", "#a78bfa"], forms: ["Ombre"] },
+  { id: "zephyr", name: "Zéphyr", role: "Le cavalier du vent", skin: "#ffe0bd", hair: "wind", hc: "#66d9e8", outfit: "#e3fafc", dark: "#0b7285", item: "waves", auras: ["#c5f6fa", "#66d9e8", "#ffffff"], forms: ["Tempête"] },
+];
+const ORBS = [
+  { k: "perfect", name: "Orbe de la Perfection", how: "Finir une partie sans faute", c: ["#ffe066", "#f59f00"], g: "★" },
+  { k: "reading", name: "Orbe de la Voix", how: "Lire un poème à 90 % ou plus", c: ["#ff8fd0", "#d6336c"], g: "♪" },
+  { k: "goal", name: "Orbe de l'Effort", how: "Atteindre l'objectif du jour", c: ["#8ce99a", "#2f9e44"], g: "◎" },
+  { k: "test", name: "Orbe de la Sagesse", how: "Faire un test de niveau", c: ["#a5d8ff", "#1c7ed6"], g: "✦" },
+  { k: "evolve", name: "Orbe de la Métamorphose", how: "Faire évoluer une figurine", c: ["#d0bfff", "#7048e8"], g: "❖" },
+  { k: "streak", name: "Orbe du Feu", how: "Jouer 3 jours d'affilée", c: ["#ffc078", "#e8590c"], g: "▲" },
+  { k: "words", name: "Orbe de la Mémoire", how: "Maîtriser 5 nouveaux mots", c: ["#99e9f2", "#0c8599"], g: "◆" },
+];
+const TITLES = ["Gardien du Verbe", "Maître des Mots", "Légende de l'Éloquence", "Académicien Suprême"];
+let col = null, rewards = [], svgUid = 0;
+
+const blankCol = () => ({ ok: {}, pw: {}, orbs: [], rares: [], jokers: 0, title: "", titles: 0, seen: {}, mastered: 0, wishes: 0 });
+const saveCol = () => store(COL_KEY, col);
+const themeWords = theme => WORDS.map((w, i) => i).filter(i => WORDS[i].t === theme);
+const masteredIn = theme => themeWords(theme).filter(i => (col.ok[i] || 0) >= MASTER).length;
+function formOf(f) {
+  if (!f.theme) return 0;
+  const p = masteredIn(f.theme) / themeWords(f.theme).length;
+  return p >= .7 ? 2 : p >= .3 ? 1 : 0;
+}
+function nextNeed(f) {  // mots à maîtriser pour la forme suivante
+  const n = themeWords(f.theme).length, m = masteredIn(f.theme), form = formOf(f);
+  return form >= 2 ? null : { have: m, need: Math.ceil(n * (form ? .7 : .3)) };
+}
+
+// Bonne réponse : le mot avance vers « maîtrisé », la figurine du thème gagne en puissance et peut se transformer.
+function gainWord(i) {
+  const w = WORDS[i], f = FIGS.find(f => f.theme === w.t);
+  col.pw[w.t] = (col.pw[w.t] || 0) + 10;
+  if ((col.ok[i] || 0) < MASTER && (col.ok[i] = (col.ok[i] || 0) + 1) === MASTER) {
+    col.mastered++;
+    if (col.mastered % 5 === 0) earnOrb("words");
+    const form = formOf(f);
+    if (form > (col.seen[f.id] || 0)) {
+      col.seen[f.id] = form;
+      rewards.push({ type: "evolve", fig: f, form });
+      earnOrb("evolve");
+    }
+  }
+  saveCol();
+}
+
+function earnOrb(k) {
+  if (col.orbs.includes(k)) return;
+  col.orbs.push(k);
+  saveCol();
+  rewards.push({ type: "orb", orb: ORBS.find(o => o.k === k) });
+}
+
+function openChest() {
+  const locked = RARES.filter(r => !col.rares.includes(r.id));
+  if (locked.length && Math.random() < CHEST_RARE) {
+    const r = locked[Math.random() * locked.length | 0];
+    col.rares.push(r.id);
+    rewards.push({ type: "rare", fig: r });
+  } else {
+    u.xp += 30; save();
+    rewards.push({ type: "xp", xp: 30 });
+  }
+  saveCol();
+}
+
+function wish(choice) {
+  const locked = RARES.filter(r => !col.rares.includes(r.id));
+  if (choice === "rare" && !locked.length) return;
+  if (choice === "joker") { col.jokers++; rewards.push({ type: "joker" }); }
+  if (choice === "rare") { const r = locked[Math.random() * locked.length | 0]; col.rares.push(r.id); rewards.push({ type: "rare", fig: r }); }
+  if (choice === "title") { col.title = TITLES[Math.min(col.titles, TITLES.length - 1)]; col.titles++; rewards.push({ type: "title", title: col.title }); }
+  if (choice === "xp") { u.xp += 200; save(); rewards.push({ type: "xp", xp: 200 }); }
+  col.orbs = [];
+  col.wishes++;
+  saveCol();
+  $("sheet").classList.remove("on");
+  renderCollection();
+  showRewards();
+}
+
+// ---------- Dessin des figurines (SVG original, style manga chibi) ----------
+function figSVG(f, form, size = 120) {
+  const id = "g" + (++svgUid), a = f.auras[Math.min(form, f.auras.length - 1)], big = form >= 2 || !f.theme;
+  const hair = {
+    bald: `<rect x="40" y="45" width="40" height="7" rx="3" fill="${f.hc}"/><path d="M80 48 l12 -4 l-4 8 z M80 50 l10 6 l-9 1 z" fill="${f.hc}"/>`,
+    long: `<path d="M38 60 Q36 34 60 34 Q84 34 82 60 L86 92 Q74 84 76 62 Q70 46 60 46 Q50 46 44 62 Q46 84 34 92 Z" fill="${f.hc}"/>`,
+    mohawk: `<path d="M54 40 Q56 22 60 20 Q64 22 66 40 Q60 36 54 40 Z" fill="${f.hc}"/><path d="M52 41 Q60 34 68 41" stroke="${f.hc}" stroke-width="4" fill="none"/>`,
+    leaves: `<ellipse cx="48" cy="40" rx="9" ry="5" transform="rotate(-30 48 40)" fill="${f.hc}"/><ellipse cx="60" cy="35" rx="9" ry="5" transform="rotate(-90 60 35)" fill="#40c057"/><ellipse cx="72" cy="40" rx="9" ry="5" transform="rotate(30 72 40)" fill="${f.hc}"/>`,
+    beard: `<path d="M41 54 Q42 38 60 38 Q78 38 79 54 Q70 46 60 46 Q50 46 41 54 Z" fill="${f.hc}"/><path d="M44 64 Q46 84 60 86 Q74 84 76 64 Q70 74 60 74 Q50 74 44 64 Z" fill="${f.hc}"/>`,
+    bun: `<path d="M41 56 Q42 38 60 38 Q78 38 79 56 Q70 47 60 47 Q50 47 41 56 Z" fill="${f.hc}"/><path d="M44 42 Q40 28 50 26 Q54 16 62 20 Q70 16 74 26 Q82 28 76 42 Z" fill="#ffffff" stroke="#dee2e6" stroke-width="1.5"/>`,
+    cap: `<path d="M40 52 Q40 36 60 36 Q80 36 80 52 Z" fill="${f.hc}"/><path d="M76 50 Q92 50 94 54 L78 55 Z" fill="${f.hc}"/><circle cx="60" cy="36" r="3" fill="#ffd43b"/>`,
+    sage: `<path d="M40 58 Q38 38 60 38 Q82 38 80 58 L82 70 Q76 60 74 52 Q60 46 46 52 Q44 60 38 70 Z" fill="${f.hc}"/><path d="M46 66 Q48 96 60 104 Q72 96 74 66 Q66 76 60 76 Q54 76 46 66 Z" fill="${f.hc}"/>`,
+    hood: `<path d="M34 66 Q32 30 60 28 Q88 30 86 66 L82 80 Q80 50 60 46 Q40 50 38 80 Z" fill="${f.hc}"/>`,
+    wind: `<path d="M40 54 Q40 36 60 36 Q76 36 82 44 L100 40 L86 50 L98 54 L82 56 Q74 46 60 47 Q48 48 40 54 Z" fill="${f.hc}"/>`,
+  }[f.hair] || "";
+  const item = {
+    staff: `<line x1="94" y1="62" x2="84" y2="142" stroke="#8b5a2b" stroke-width="4" stroke-linecap="round"/><circle cx="94" cy="62" r="4" fill="${a}"/>`,
+    fans: `<path d="M90 112 L104 92 A22 22 0 0 1 110 116 Z" fill="${a}" stroke="${f.dark}" stroke-width="1.5"/><path d="M30 112 L16 92 A22 22 0 0 0 10 116 Z" fill="${a}" stroke="${f.dark}" stroke-width="1.5"/>`,
+    waves: `<path d="M86 60 q6 4 0 8 M92 56 q9 8 0 16 M98 52 q12 12 0 24" stroke="${a}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
+    leaf: `<path d="M92 112 Q104 92 112 98 Q108 116 92 112 Z" fill="#40c057" stroke="#2b8a3e" stroke-width="1.5"/>`,
+    hammer: `<line x1="92" y1="116" x2="98" y2="80" stroke="#5c3a21" stroke-width="4" stroke-linecap="round"/><rect x="88" y="70" width="22" height="13" rx="3" fill="#868e96" stroke="#495057" stroke-width="1.5"/>`,
+    knives: `<path d="M92 114 L102 88 L105 89 L96 115 Z" fill="#dee2e6" stroke="#868e96"/><path d="M28 114 L18 88 L15 89 L24 115 Z" fill="#dee2e6" stroke="#868e96"/>`,
+    star: `<path d="M98 96 l3 7 l7 1 l-5 5 l1 7 l-6 -3 l-6 3 l1 -7 l-5 -5 l7 -1 z" fill="#ffd43b" stroke="#f59f00" stroke-width="1"/>`,
+  }[f.item] || "";
+  const flames = big ? `<path d="M60 18 L68 40 L84 26 L82 50 L102 46 L90 66 L108 76 L88 84 L100 104 L80 100 L84 124 L66 110 L60 132 L54 110 L36 124 L40 100 L20 104 L32 84 L12 76 L30 66 L18 46 L38 50 L36 26 L52 40 Z" fill="url(#${id}a)" opacity=".75"/>
+    <path d="M24 40 l3 -8 l3 8 l8 3 l-8 3 l-3 8 l-3 -8 l-8 -3 z M94 30 l2 -5 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 z M100 118 l2 -5 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 z" fill="#fff" opacity=".9"/>` : "";
+  const eyes = big
+    ? `<ellipse cx="53" cy="60" rx="2.8" ry="3.4" fill="#fff" stroke="${a}" stroke-width="1.5"/><ellipse cx="67" cy="60" rx="2.8" ry="3.4" fill="#fff" stroke="${a}" stroke-width="1.5"/>`
+    : `<ellipse cx="53" cy="60" rx="2.4" ry="3.2" fill="#1b1b1b"/><ellipse cx="67" cy="60" rx="2.4" ry="3.2" fill="#1b1b1b"/><circle cx="54" cy="59" r=".9" fill="#fff"/><circle cx="68" cy="59" r=".9" fill="#fff"/>`;
+  return `<svg viewBox="0 0 120 150" width="${size}" height="${size * 1.25}" aria-label="${esc(f.name)}">
+  <defs><radialGradient id="${id}a" cx="50%" cy="55%" r="55%"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="${a}"/><stop offset="1" stop-color="${a}" stop-opacity="0"/></radialGradient></defs>
+  <ellipse cx="60" cy="142" rx="30" ry="5" fill="#000" opacity=".12"/>
+  <circle cx="60" cy="80" r="${[44, 54, 60][form] || 60}" fill="url(#${id}a)" opacity="${[.35, .55, .7][form] || .7}"/>
+  ${flames}
+  <rect x="46" y="112" width="11" height="24" rx="5" fill="${f.dark}"/><rect x="63" y="112" width="11" height="24" rx="5" fill="${f.dark}"/>
+  <ellipse cx="51" cy="137" rx="8" ry="4" fill="#212529"/><ellipse cx="69" cy="137" rx="8" ry="4" fill="#212529"/>
+  <rect x="28" y="84" width="11" height="28" rx="5" transform="rotate(14 33 84)" fill="${f.outfit}" stroke="${f.dark}" stroke-width="1"/>
+  <rect x="81" y="84" width="11" height="28" rx="5" transform="rotate(-14 87 84)" fill="${f.outfit}" stroke="${f.dark}" stroke-width="1"/>
+  <circle cx="30" cy="112" r="5" fill="${f.skin}"/><circle cx="90" cy="112" r="5" fill="${f.skin}"/>
+  <path d="M40 82 Q60 76 80 82 L77 116 L43 116 Z" fill="${f.outfit}" stroke="${f.dark}" stroke-width="1.2"/>
+  <path d="M52 80 L60 96 L68 80" fill="none" stroke="${f.dark}" stroke-width="2"/>
+  <rect x="42" y="104" width="36" height="6" rx="2" fill="${f.dark}"/>
+  ${form >= 1 || !f.theme ? `<ellipse cx="40" cy="84" rx="9" ry="6" fill="${a}" stroke="${f.dark}" stroke-width="1.2"/><ellipse cx="80" cy="84" rx="9" ry="6" fill="${a}" stroke="${f.dark}" stroke-width="1.2"/>` : ""}
+  ${item}
+  <circle cx="39" cy="61" r="4" fill="${f.skin}"/><circle cx="81" cy="61" r="4" fill="${f.skin}"/>
+  <circle cx="60" cy="58" r="20" fill="${f.skin}"/>
+  <path d="M48 52 L57 55 M72 52 L63 55" stroke="#1b1b1b" stroke-width="2.2" stroke-linecap="round"/>
+  ${eyes}
+  <path d="M55 68 Q60 ${form >= 1 ? 72 : 70} 65 68" stroke="#1b1b1b" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  ${hair}
+</svg>`;
+}
+
+// ---------- Écran Collection ----------
+function orbHTML(o, have, size = 40) {
+  return `<div class="orb ${have ? "" : "off"}" style="--o1:${o.c[0]};--o2:${o.c[1]};width:${size}px;height:${size}px;font-size:${size * .4}px" title="${esc(o.name)}">${o.g}</div>`;
+}
+
+function renderCollection() {
+  const n = col.orbs.length;
+  $("orbs").innerHTML = ORBS.map(o => orbHTML(o, col.orbs.includes(o.k))).join("");
+  $("orbcount").textContent = `${n}/7`;
+  $("wishbtn").hidden = n < 7;
+  $("orbhint").textContent = n < 7 ? `Prochaine : ${ORBS.find(o => !col.orbs.includes(o.k)).how.toLowerCase()}.` : "Les 7 Orbes sont réunies : fais un vœu !";
+  $("figs").innerHTML = FIGS.map(f => {
+    const form = formOf(f), nx = nextNeed(f);
+    return `<button class="glass fig" data-fig="${f.id}">${figSVG(f, form, 92)}<b>${esc(f.name)}</b>
+      <span>${esc(f.forms[form])} · ⚡ ${col.pw[f.theme] || 0}</span>
+      <div class="figbar"><div style="width:${nx ? Math.min(100, 100 * nx.have / nx.need) : 100}%"></div></div>
+      <small>${nx ? `${nx.have}/${nx.need} mots « ${esc(f.theme)} »` : "Forme finale !"}</small></button>`;
+  }).join("");
+  $("rares").innerHTML = RARES.map(r => {
+    const have = col.rares.includes(r.id);
+    return `<button class="glass fig ${have ? "" : "locked"}" data-rare="${r.id}">${figSVG(r, 0, 92)}<b>${have ? esc(r.name) : "???"}</b><span>${have ? esc(r.role) : "Caché dans les coffres"}</span></button>`;
+  }).join("");
+}
+
+function figDetail(f) {
+  const form = formOf(f), nx = nextNeed(f);
+  $("sheet").innerHTML = `<div class="figdetail">${figSVG(f, form, 150)}</div>
+    <div class="head">${esc(f.name)} <span class="lvl">${esc(f.role)}</span></div>
+    <p>Thème <b>${esc(f.theme)}</b> · puissance ⚡ ${col.pw[f.theme] || 0}</p>
+    <div class="forms">${f.forms.map((name, k) => `<div class="${k <= form ? "" : "locked"}">${figSVG(f, k, 56)}<small>${esc(name)}</small></div>`).join("")}</div>
+    <p class="note">${nx ? `Maîtrise encore ${nx.need - nx.have} mot${nx.need - nx.have > 1 ? "s" : ""} du thème « ${esc(f.theme)} » (réussis-les 3 fois) pour la prochaine transformation.` : "Forme finale atteinte. Bravo !"}</p>
+    <button class="btn primary" id="sheetclose">Fermer</button>`;
+  $("sheet").classList.add("on");
+}
+
+function wishSheet() {
+  const noRare = RARES.every(r => col.rares.includes(r.id));
+  $("sheet").innerHTML = `<div class="head">🌟 Fais un vœu</div><p>Les 7 Orbes t'accordent un souhait. Elles se disperseront ensuite pour une nouvelle quête.</p>
+    <div class="wishes">
+      <button class="btn glass" data-wish="rare" ${noRare ? "disabled" : ""}>🎁 Une figurine rare</button>
+      <button class="btn glass" data-wish="title">👑 Un titre : ${esc(TITLES[Math.min(col.titles, TITLES.length - 1)])}</button>
+      <button class="btn glass" data-wish="joker">🃏 Un joker de série</button>
+      <button class="btn glass" data-wish="xp">⭐ 200 XP</button>
+    </div><button class="btn" id="sheetclose">Plus tard</button>`;
+  $("sheet").classList.add("on");
+}
+
+// ---------- Animations de récompense, une à la fois ----------
+function showRewards() {
+  if (!rewards.length || $("reward").classList.contains("on")) return;
+  const r = rewards.shift();
+  const body = {
+    evolve: () => `<div class="burst" style="--a:${r.fig.auras[r.form]}">${figSVG(r.fig, r.form, 170)}</div><div class="rtitle">${esc(r.fig.name)} se transforme !</div><div class="rsub">Forme ${r.form + 1} : ${esc(r.fig.forms[r.form])}</div>`,
+    orb: () => `<div class="burst" style="--a:${r.orb.c[0]}">${orbHTML(r.orb, true, 110)}</div><div class="rtitle">${esc(r.orb.name)}</div><div class="rsub">${col.orbs.length}/7 Orbes${col.orbs.length === 7 ? " · fais un vœu dans Collection !" : ""}</div>`,
+    rare: () => `<div class="burst" style="--a:${r.fig.auras[0]}">${figSVG(r.fig, 0, 170)}</div><div class="rtitle">Figurine rare : ${esc(r.fig.name)} !</div><div class="rsub">${esc(r.fig.role)}</div>`,
+    xp: () => `<div class="burst big" style="--a:#ffd43b">🎁</div><div class="rtitle">Coffre : +${r.xp} XP</div>`,
+    joker: () => `<div class="burst big" style="--a:#9b5cff">🃏</div><div class="rtitle">Joker de série</div><div class="rsub">Il sauvera ta série si tu rates un jour.</div>`,
+    title: () => `<div class="burst big" style="--a:#ffd43b">👑</div><div class="rtitle">Nouveau titre</div><div class="rsub">${esc(r.title)}</div>`,
+  }[r.type]();
+  $("reward").innerHTML = `<div class="glass rcard">${body}<button class="btn primary" id="rewardok">Super !</button></div>`;
+  $("reward").classList.add("on");
+  haptic("ok");
+}
+
+function closeReward() {
+  $("reward").classList.remove("on");
+  if ($("collection").classList.contains("on")) renderCollection();
+  setTimeout(showRewards, 250);
 }
 
 // ---------- Partie ----------
@@ -715,7 +993,14 @@ function award(i, ok, review) {
   if (u.day !== t) { u.day = t; u.dayxp = 0; }
   if (ok) {
     u.xp += 10; u.dayxp += 10;
-    if (u.last !== t) { u.streak = u.last === t - 1 ? u.streak + 1 : 1; u.last = t; }
+    if (u.dayxp === GOAL) earnOrb("goal");
+    if (u.last !== t) {
+      const saved = u.last === t - 2 && col.jokers > 0;
+      if (saved) { col.jokers--; saveCol(); toast("🃏 Joker utilisé : ta série est sauvée"); }
+      u.streak = u.last === t - 1 || saved ? u.streak + 1 : 1;
+      u.last = t;
+      if (u.streak % 3 === 0) earnOrb("streak");
+    }
     if (review && u.book[i]) {
       const b = u.book[i][0] + 1;
       if (b > 5) delete u.book[i]; else u.book[i] = [b, t + BOX_DAYS[b]];
@@ -729,7 +1014,7 @@ function verdict(ok, note = "") {
   award(game.cur, ok, game.kind === "rev");
   LOG = [...LOG, [today(), game.cur, +ok, game.kind === "rev" ? "r" : game.mode[0]]].slice(-LOG_MAX);
   store(LOG_KEY, LOG);
-  if (ok) { game.good++; game.xp += 10; }
+  if (ok) { game.good++; game.xp += 10; gainWord(game.cur); }
   haptic(ok ? "ok" : "ko");
   const w = WORDS[game.cur], last = game.i + 1 >= game.ids.length;
   $("prog").style.width = ((game.i + 1) / game.ids.length * 100) + "%";
@@ -753,7 +1038,7 @@ function testAnswer(pick) {
   game.open = false;
   const r = pick === -1 ? -1 : +(pick === game.cur);
   game.ans.push([game.cur, r]);
-  if (r === 1) game.good++;
+  if (r === 1) { game.good++; gainWord(game.cur); }
   else u.book[game.cur] = u.book[game.cur] || [1, today() + 1];
   haptic("light");
   game.i++;
@@ -785,6 +1070,8 @@ function finishTest() {
     + (CAN_SEND ? "" : `<p class="hint">Pour envoyer ce résultat à l'analyse, refais le test depuis le bouton « 📝 Test de niveau » sous le chat du bot.</p>`);
   $("again").textContent = CAN_SEND ? "Envoyer à l'analyse" : "Refaire le test";
   show("end");
+  earnOrb("test");
+  showRewards();
 }
 
 // Envoie le test et les parties jouées au bot (Telegram ferme alors l'app). Limite Telegram : 4096 octets.
@@ -809,6 +1096,8 @@ function finish() {
   $("gotstreak").textContent = `🔥 ${streak()} j`;
   show("end");
   if (g === n) haptic("ok");
+  if (g === n && n >= 5) earnOrb("perfect");
+  showRewards();
 }
 
 function quit() {
@@ -844,6 +1133,12 @@ document.addEventListener("click", e => {
   // ▶︎ au début du poème : le texte défile et l'enregistrement démarre. ⏹ pendant l'enregistrement : tout s'arrête et la correction se lance.
   else if (t.id === "playpause") rec.stream ? stopRec() : !poem.timer && poem.line === -1 ? startRec() : togglePoem();
   else if (t.id === "rec") rec.stream ? stopRec() : startRec();
+  else if (t.dataset.fig) figDetail(FIGS.find(f => f.id === t.dataset.fig));
+  else if (t.dataset.rare) toast(col.rares.includes(t.dataset.rare) ? RARES.find(r => r.id === t.dataset.rare).role : "Lis un poème à 80 % ou plus pour ouvrir un coffre");
+  else if (t.id === "wishbtn") wishSheet();
+  else if (t.dataset.wish) wish(t.dataset.wish);
+  else if (t.id === "sheetclose") $("sheet").classList.remove("on");
+  else if (t.id === "rewardok") closeReward();
   else if (t.id === "reread") openPoem(poem.i);
   else if (t.id === "again" && game.kind === "test" && CAN_SEND) sendResults();
   else if (t.id === "again") start(game.kind !== "rev" || due().length ? game.kind : "quiz");
@@ -857,9 +1152,10 @@ document.addEventListener("click", e => {
     try { tg.setHeaderColor("#ffffff"); tg.setBackgroundColor("#ffffff"); } catch (e) {}
     tg.BackButton.onClick(() => document.body.classList.contains("playing") ? quit() : show($("poem").classList.contains("on") ? "read" : "home"));
   }
-  [WORDS, POEMS, u, LOG, READS] = await Promise.all([fetch("words.json").then(r => r.json()), fetch("poems.json").then(r => r.json()),
-                                                     load(KEY, blank()), load(LOG_KEY, []), load(READS_KEY, [])]);
+  [WORDS, POEMS, u, LOG, READS, col] = await Promise.all([fetch("words.json").then(r => r.json()), fetch("poems.json").then(r => r.json()),
+                                                          load(KEY, blank()), load(LOG_KEY, []), load(READS_KEY, []), load(COL_KEY, blankCol())]);
   u = Object.assign(blank(), u);
+  col = Object.assign(blankCol(), col);
   renderHome();
   if (CAN_SEND && MODE === "test") start("test");
   if (CAN_SEND && MODE === "read") show("read");
