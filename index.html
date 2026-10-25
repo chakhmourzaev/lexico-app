@@ -181,6 +181,23 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
 .missed div + div { margin-top: 8px; }
 .result .hint { font-size: 13px; color: var(--sub); margin: -8px 0 16px; }
 
+/* Lecture à voix haute */
+.poem-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 18px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.poem-item + .poem-item { border-top: 1px solid rgba(127,127,140,.18); }
+.poem-item b { display: block; font-size: 16px; }
+.poem-item span { font-size: 13px; color: var(--sub); }
+.poem-item i { margin-left: auto; font-style: normal; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 10px; background: var(--glass-strong); box-shadow: inset 0 0 0 1px var(--edge); }
+.poem-head { margin: 6px 4px 12px; }
+.poem-head b { display: block; font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+.poem-head span { color: var(--sub); }
+.verses { padding: 22px 20px 40vh; max-height: 56vh; overflow-y: auto; scroll-behavior: smooth; -webkit-mask-image: linear-gradient(transparent, #000 12%, #000 70%, transparent); mask-image: linear-gradient(transparent, #000 12%, #000 70%, transparent); }
+.verses p { margin: 0; padding: 7px 0; font-size: 21px; font-weight: 600; line-height: 1.35; opacity: .3; transition: opacity .4s, transform .4s; transform-origin: left; }
+.verses p.cur { opacity: 1; transform: scale(1.04); background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.verses p.done { opacity: .55; }
+.controls { display: flex; gap: 10px; margin: 14px 0 10px; }
+.controls .btn { flex: none; width: 64px; padding: 14px 0; }
+.controls .seg { flex: 1; }
+
 @media (prefers-reduced-motion: reduce) { .bg i { animation: none; } * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -211,6 +228,7 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
     <h2>Jouer</h2>
     <div class="games">
       <button class="glass game wide" data-game="test"><div class="ico">◎</div><div><b>Test de niveau</b><span>10 questions pour savoir où tu en es</span></div></button>
+      <button class="glass game wide" data-tab="read"><div class="ico">🎙</div><div><b>Lecture à voix haute</b><span>Lis un poème, le bot repère tes fautes</span></div></button>
       <button class="glass game" data-game="quiz"><div class="ico">?</div><b>Quiz</b><span>Trouve le mot</span></button>
       <button class="glass game" data-game="gap"><div class="ico">✎</div><b>Phrase à trou</b><span>Complète la phrase</span></button>
       <button class="glass game" data-game="mix"><div class="ico">⇄</div><b>Mot mélangé</b><span>Remets les lettres</span></button>
@@ -226,6 +244,24 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
     <h1>Carnet</h1>
     <p class="hello">Réussis un mot 5 fois en révision, à quelques jours d'écart, et il est acquis.</p>
     <div class="glass list" id="booklist"></div>
+  </section>
+
+  <!-- Lecture : liste des poèmes -->
+  <section class="screen" id="read">
+    <h1>Lecture</h1>
+    <p class="hello">Entraîne-toi ici avec le texte qui défile, puis lis-le au bot en message vocal : il repère les mots oubliés ou mal lus.</p>
+    <div class="glass list" id="poemlist"></div>
+  </section>
+
+  <!-- Lecture : poème qui défile -->
+  <section class="screen" id="poem">
+    <div class="poem-head"><b id="ptitle"></b><span id="pauthor"></span></div>
+    <div class="glass verses" id="verses"></div>
+    <div class="controls">
+      <button class="btn primary" id="playpause">▶︎</button>
+      <div class="glass seg" id="speed"><button data-speed="0.7">Lent</button><button data-speed="1" class="on">Normal</button><button data-speed="1.4">Rapide</button></div>
+    </div>
+    <button class="btn primary" id="tobot">🎙 Lire au bot et être corrigé</button>
   </section>
 
   <!-- Partie -->
@@ -258,6 +294,7 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
 <nav class="glass tabs">
   <button class="on" data-tab="home"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.2 2.8 11a1 1 0 0 0 1.3 1.5l.9-.8V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-8.3l.9.8a1 1 0 1 0 1.3-1.5z"/></svg>Accueil</button>
   <button data-tab="book"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h11a2 2 0 0 1 2 2v14H7a1 1 0 0 0 0 2h12v2H7a3 3 0 0 1-3-3V4a2 2 0 0 1 2-2zm3 4v2h7V6z"/></svg>Carnet</button>
+  <button data-tab="read"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1a7 7 0 0 0 6-6.9z"/></svg>Lecture</button>
 </nav>
 
 <script>
@@ -267,8 +304,9 @@ const GAMES = { quiz: "Quiz définition", gap: "Phrase à trou", mix: "Mot méla
 const BOX_DAYS = [0, 1, 2, 4, 8, 16];  // mêmes règles que le bot
 const PER_GAME = 10, GOAL = 50, KEY = "lexico", LOG_KEY = "lexico_log", LOG_MAX = 150;
 const TEST_PLAN = { 1: 3, 2: 4, 3: 3 };  // questions par niveau, de la plus facile à la plus dure
-// Telegram ne laisse renvoyer des données au bot que si l'app est ouverte par le bouton « Test de niveau » du clavier.
-const CAN_SEND = new URLSearchParams(location.search).get("mode") === "test" && !!(tg && tg.initData);
+// Telegram ne laisse renvoyer des données au bot que si l'app est ouverte par un bouton du clavier (« Test de niveau » ou « Lecture »).
+const MODE = new URLSearchParams(location.search).get("mode");
+const CAN_SEND = ["test", "read"].includes(MODE) && !!(tg && tg.initData);
 const $ = id => document.getElementById(id);
 const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -280,7 +318,7 @@ function today() {
   return Math.floor(Date.UTC(y, m - 1, d) / 864e5);
 }
 
-let WORDS = [], u, game, LOG = [];  // LOG : réponses des parties, [jour, mot, réussi 1/0, jeu q/g/m/r], envoyées au bot avec le test
+let WORDS = [], POEMS = [], u, game, LOG = [], poem;  // LOG : réponses des parties, [jour, mot, réussi 1/0, jeu q/g/m/r], envoyées au bot avec le test
 
 // ---------- Sauvegarde : Telegram CloudStorage (4 Ko par clé), sinon le navigateur ----------
 function blank() { return { xp: 0, streak: 0, last: 0, day: 0, dayxp: 0, lvl: 0, book: {} }; }
@@ -306,9 +344,12 @@ function show(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id));
   document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === id));
   document.body.classList.toggle("playing", id === "play" || id === "end");
-  if (tg) id === "play" || id === "book" ? tg.BackButton.show() : tg.BackButton.hide();
+  if (tg) id === "home" ? tg.BackButton.hide() : tg.BackButton.show();
+  if (id !== "poem") stopPoem();
+  document.querySelector(`.tabs button[data-tab="read"]`).classList.toggle("on", id === "read" || id === "poem");
   if (id === "home") renderHome();
   if (id === "book") renderBook();
+  if (id === "read") renderPoems();
   window.scrollTo(0, 0);
 }
 function toast(t) {
@@ -338,6 +379,47 @@ function renderBook() {
     const b = u.book[i][0], w = WORDS[+i];
     return `<div class="item"><span class="dots">${"●".repeat(b - 1)}${"○".repeat(6 - b)}</span><b>${esc(w.w)}</b><p>${esc(w.d)}</p></div>`;
   }).join("") : `<div class="empty"><b>📒</b>Ton carnet est vide. Joue une partie : chaque mot raté y sera noté.</div>`;
+}
+
+// ---------- Lecture à voix haute ----------
+const DOTS = { 1: "Courant", 2: "Soutenu", 3: "Expert" };
+function renderPoems() {
+  $("poemlist").innerHTML = POEMS.map((p, i) => `<button class="poem-item" data-poem="${i}"><div><b>${esc(p.title)}</b><span>${esc(p.author)}</span></div><i>${DOTS[p.n]}</i></button>`).join("");
+}
+function openPoem(i) {
+  poem = { i, line: -1, speed: poem ? poem.speed : 1, timer: null };
+  const p = POEMS[i];
+  $("ptitle").textContent = p.title;
+  $("pauthor").textContent = p.author;
+  $("verses").innerHTML = p.lines.map(l => `<p>${esc(l)}</p>`).join("");
+  $("verses").scrollTop = 0;
+  $("playpause").textContent = "▶︎";
+  show("poem");
+}
+// Chaque vers reste affiché un temps proportionnel à sa longueur.
+function stepPoem() {
+  const ps = $("verses").children;
+  if (poem.line >= 0) { ps[poem.line].classList.remove("cur"); ps[poem.line].classList.add("done"); }
+  poem.line++;
+  if (poem.line >= ps.length) { stopPoem(); poem.line = -1; return; }
+  const p = ps[poem.line];
+  p.classList.add("cur");
+  $("verses").scrollTop = p.offsetTop - $("verses").clientHeight * .35;
+  poem.timer = setTimeout(stepPoem, (900 + p.textContent.length * 75) / poem.speed);
+}
+function togglePoem() {
+  if (poem.timer) return stopPoem();
+  if (poem.line === -1) [...$("verses").children].forEach(p => p.classList.remove("done", "cur"));
+  else poem.line--;  // reprend au vers en cours
+  $("playpause").textContent = "⏸";
+  haptic("light");
+  stepPoem();
+}
+function stopPoem() {
+  if (!poem) return;
+  clearTimeout(poem.timer);
+  poem.timer = null;
+  $("playpause").textContent = "▶︎";
 }
 
 // ---------- Partie ----------
@@ -535,6 +617,10 @@ document.addEventListener("click", e => {
   else if (t.id === "skip" && game.open) verdict(false);
   else if (t.id === "next") next();
   else if (t.id === "quit") quit();
+  else if (t.dataset.poem !== undefined) { haptic("light"); openPoem(+t.dataset.poem); }
+  else if (t.dataset.speed) { poem.speed = +t.dataset.speed; document.querySelectorAll("#speed button").forEach(b => b.classList.toggle("on", b === t)); }
+  else if (t.id === "playpause") togglePoem();
+  else if (t.id === "tobot") CAN_SEND ? tg.sendData(JSON.stringify({ kind: "poem", id: poem.i })) : toast("Ouvre « 🎙 Lecture » sous le chat, ou tape /lecture");
   else if (t.id === "again" && game.kind === "test" && CAN_SEND) sendResults();
   else if (t.id === "again") start(game.kind !== "rev" || due().length ? game.kind : "quiz");
   else if (t.id === "tohome") show("home");
@@ -545,12 +631,14 @@ document.addEventListener("click", e => {
   if (tg) {
     tg.ready(); tg.expand();
     try { tg.setHeaderColor("#ffffff"); tg.setBackgroundColor("#ffffff"); } catch (e) {}
-    tg.BackButton.onClick(() => document.body.classList.contains("playing") ? quit() : show("home"));
+    tg.BackButton.onClick(() => document.body.classList.contains("playing") ? quit() : show($("poem").classList.contains("on") ? "read" : "home"));
   }
-  [WORDS, u, LOG] = await Promise.all([fetch("words.json").then(r => r.json()), load(KEY, blank()), load(LOG_KEY, [])]);
+  [WORDS, POEMS, u, LOG] = await Promise.all([fetch("words.json").then(r => r.json()), fetch("poems.json").then(r => r.json()),
+                                              load(KEY, blank()), load(LOG_KEY, [])]);
   u = Object.assign(blank(), u);
   renderHome();
-  if (CAN_SEND) start("test");
+  if (CAN_SEND && MODE === "test") start("test");
+  if (CAN_SEND && MODE === "read") show("read");
 })();
 </script>
 </body>
