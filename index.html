@@ -278,7 +278,7 @@ body.playing .tabs { transform: translate(-50%, 140%); transition: transform .35
         <div class="glass seg" id="speed"><button data-speed="0.7">Lent</button><button data-speed="1" class="on">Normal</button><button data-speed="1.4">Rapide</button></div>
       </div>
       <button class="btn primary" id="rec">🎙 Enregistrer ma lecture</button>
-      <p class="rec-hint" id="rechint">Lis le poème à voix haute, puis touche « Terminer » : la correction s'affiche ici.</p>
+      <p class="rec-hint" id="rechint">Touche ▶︎ : le poème défile et l'enregistrement démarre. À la fin du poème (ou sur « Terminer »), la correction s'affiche ici.</p>
     </div>
     <div class="glass readres" id="readres" hidden></div>
   </section>
@@ -429,7 +429,13 @@ function stepPoem() {
   const ps = $("verses").children;
   if (poem.line >= 0) { ps[poem.line].classList.remove("cur"); ps[poem.line].classList.add("done"); }
   poem.line++;
-  if (poem.line >= ps.length) { stopPoem(); poem.line = -1; return; }
+  if (poem.line >= ps.length) {
+    stopPoem();
+    poem.line = -1;
+    // Fin du défilement : on laisse quelques secondes pour finir le dernier vers, puis la correction se lance.
+    if (rec.stream) poem.endTimer = setTimeout(() => rec.stream && stopRec(), END_GRACE);
+    return;
+  }
   const p = ps[poem.line];
   p.classList.add("cur");
   $("verses").scrollTop = p.offsetTop - $("verses").clientHeight * .35;
@@ -456,6 +462,7 @@ function stopPoem() {
 // un mot dont les sons ont presque tous disparu est « oublié », une voyelle remplacée par une autre est « mal prononcée ».
 // Mêmes règles que pronunciation.py côté bot.
 const PH_MODEL = "onnx-community/wav2vec2-lv-60-espeak-cv-ft-ONNX";
+const END_GRACE = 4000;  // ms après le dernier vers avant d'arrêter l'enregistrement
 const TJS = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0";
 const SAME = { r: "ʁ", "ʀ": "ʁ", "ɑ": "a", "ɐ": "a", "ɜ": "ə", "ɪ": "i", "ʊ": "u", "œ̃": "ɛ̃", "æ̃": "ɛ̃", "ɡ": "g" };
 const CLOSE = new Set(["e|ɛ", "o|ɔ", "ø|œ", "ə|œ", "ə|ø"]);
@@ -578,6 +585,7 @@ async function startRec() {
 
 async function stopRec(analyse = true) {
   clearInterval(rec.tick);
+  clearTimeout(poem.endTimer);
   rec.stream.getTracks().forEach(t => t.stop());
   rec.stream = null;
   const sr = rec.ctx.sampleRate, n = rec.chunks.reduce((a, c) => a + c.length, 0);
@@ -832,7 +840,8 @@ document.addEventListener("click", e => {
   else if (t.id === "quit") quit();
   else if (t.dataset.poem !== undefined) { haptic("light"); openPoem(+t.dataset.poem); }
   else if (t.dataset.speed) { poem.speed = +t.dataset.speed; document.querySelectorAll("#speed button").forEach(b => b.classList.toggle("on", b === t)); }
-  else if (t.id === "playpause") togglePoem();
+  // ▶︎ au début du poème : le texte défile et l'enregistrement démarre en même temps. Ensuite, ▶︎/⏸ met juste le défilement en pause.
+  else if (t.id === "playpause") !rec.stream && !poem.timer && poem.line === -1 ? startRec() : togglePoem();
   else if (t.id === "rec") rec.stream ? stopRec() : startRec();
   else if (t.id === "reread") openPoem(poem.i);
   else if (t.id === "again" && game.kind === "test" && CAN_SEND) sendResults();
